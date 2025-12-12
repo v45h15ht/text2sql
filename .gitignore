@@ -1,0 +1,39 @@
+# ------------------------------------------------
+# PYTHON & VIRTUAL ENV
+# ------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# ------------------------------------------------
+# SECRETS & CONFIG (CRITICAL)
+# ------------------------------------------------
+.env
+.streamlit/secrets.toml
+
+# ------------------------------------------------
+# DATABASES & GENERATED FILES
+# ------------------------------------------------
+# We ignore the .db file because it is generated 
+# automatically from the CSVs by setup_db.py
+*.db
+*.sqlite
+*.sqlite3
+knowledge_base.db
+
+# ------------------------------------------------
+# IDE & OS JUNK
+# ------------------------------------------------
+.DS_Store
+.vscode/
+.idea/
+
+# ------------------------------------------------
+# OPTIONAL: DATA FILES
+# ------------------------------------------------
+# Uncomment the line below if your CSVs contain sensitive 
+# data that you DO NOT want on GitHub.
+data/
