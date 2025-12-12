@@ -23,7 +23,7 @@ def get_chat_engine():
         logger.error("Google API Key is missing in .env")
     
     Settings.llm = GoogleGenAI(
-        model="models/gemini-1.5-pro", 
+        model="models/gemini-3-pro-preview", 
         api_key=api_key,
         temperature=0.1
     )
