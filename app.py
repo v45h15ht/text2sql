@@ -4,7 +4,7 @@ import os
 
 st.set_page_config(page_title="Data Chatbot", layout="wide")
 
-st.title("🤖 Chat with your Knowledge Base")
+st.title("Chat with your Knowledge Base")
 st.markdown("Query your CSV data using natural language.")
 
 # Initialize the Chat Engine once and cache it

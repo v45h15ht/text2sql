@@ -17,8 +17,6 @@ env/
 # ------------------------------------------------
 # DATABASES & GENERATED FILES
 # ------------------------------------------------
-# We ignore the .db file because it is generated 
-# automatically from the CSVs by setup_db.py
 *.db
 *.sqlite
 *.sqlite3
@@ -34,6 +32,4 @@ knowledge_base.db
 # ------------------------------------------------
 # OPTIONAL: DATA FILES
 # ------------------------------------------------
-# Uncomment the line below if your CSVs contain sensitive 
-# data that you DO NOT want on GitHub.
 data/

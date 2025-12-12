@@ -20,10 +20,10 @@ def build_database():
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    print(f"✅ Created database: {DB_NAME}")
+    print(f"Created database: {DB_NAME}")
 
     if not os.path.exists(DDL_FILE):
-        print(f"❌ Error: {DDL_FILE} not found!")
+        print(f"Error: {DDL_FILE} not found!")
         return
 
     with open(DDL_FILE, "r") as f:
@@ -48,14 +48,14 @@ def build_database():
                 df.to_sql(table_name, conn, if_exists='append', index=False)
                 print(f"🔹 Loaded {table_name}: {len(df)} rows")
             else:
-                print(f"⚠️  Table created, but no CSV found: {csv_path}")
+                print(f"Table created, but no CSV found: {csv_path}")
 
         except Exception as e:
-            print(f"❌ Error on {table_name}: {e}")
+            print(f"Error on {table_name}: {e}")
 
     conn.commit()
     conn.close()
-    print("🎉 Database setup complete.")
+    print("Database setup complete.")
 
 if __name__ == "__main__":
     build_database()

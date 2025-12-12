@@ -15,7 +15,7 @@ def get_chat_engine():
     api_key = os.getenv("GOOGLE_API_KEY")
     
     Settings.llm = GoogleGenAI(
-        model="models/gemini-3-pro-preview", # Or gemini-3-pro-preview
+        model="models/gemini-3-pro-preview",
         api_key=api_key,
         temperature=0.1
     )
@@ -24,8 +24,7 @@ def get_chat_engine():
         model="models/text-embedding-004", 
         api_key=api_key
     )
-
-    # ... (The rest of the file remains exactly the same)
+    
     engine = get_engine()
     sql_database = SQLDatabase(engine)
     
