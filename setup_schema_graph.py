@@ -1,90 +1,94 @@
 import sqlite3
 import os
 from neo4j import GraphDatabase
+from dotenv import load_dotenv
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
-# CONFIGURATION
-SQLITE_DB = "knowledge_base.db"
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_AUTH = ("neo4j", "password123")
+load_dotenv()
 
-class SchemaLoader:
-    def __init__(self):
-        self.driver = GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH)
+# --- CONFIGURATION ---
+SQLITE_DB = os.getenv("SQLITE_DB", "knowledge_base.db")
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_AUTH = (os.getenv("NEO4J_USER", "neo4j"), os.getenv("NEO4J_PASSWORD", "password123"))
+API_KEY = os.getenv("GOOGLE_API_KEY")
+
+def load_schema_hybrid():
+    print("Building Hybrid Graph (Vector + Keyword)...")
+    
+    embed_model = GoogleGenAIEmbedding(model="models/text-embedding-004", api_key=API_KEY)
+    driver = GraphDatabase.driver(NEO4J_URI, auth=NEO4J_AUTH)
+    conn = sqlite3.connect(SQLITE_DB)
+    cursor = conn.cursor()
+
+    print("Clearing old data...")
+    with driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n")
         
-    def close(self):
-        self.driver.close()
+        # 1. Create Vector Index (Semantic Search)
+        try:
+            session.run("""
+                CREATE VECTOR INDEX table_embeddings IF NOT EXISTS
+                FOR (t:Table) ON (t.embedding)
+                OPTIONS {indexConfig: {
+                    `vector.dimensions`: 768,
+                    `vector.similarity_function`: 'cosine'
+                }}
+            """)
+        except Exception: pass
 
-    def load_schema(self):
-        """
-        Reads SQLite metadata and builds a Knowledge Graph of the Schema.
-        Nodes: Table, Column
-        Edges: HAS_COLUMN, LINKS_TO (Foreign Keys)
-        """
-        if not os.path.exists(SQLITE_DB):
-            print(f"SQLite DB '{SQLITE_DB}' not found. Run setup_db.py first.")
-            return
+        # 2. Create Fulltext Index (BM25 Keyword Search) <-- NEW
+        try:
+            session.run("""
+                CREATE FULLTEXT INDEX table_keywords IF NOT EXISTS
+                FOR (t:Table) ON EACH [t.description]
+            """)
+        except Exception: pass
 
-        conn = sqlite3.connect(SQLITE_DB)
-        cursor = conn.cursor()
+    # 3. Process Tables
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [r[0] for r in cursor.fetchall()]
 
-        # 1. Clean existing graph
-        print("Clearing old schema graph...")
-        with self.driver.session() as session:
-            session.run("MATCH (n) DETACH DELETE n")
-
-        # 2. Get All Tables
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [r[0] for r in cursor.fetchall()]
-
-        print(f"Building Graph for {len(tables)} tables...")
-
-        for table in tables:
-            # Create Table Node
-            with self.driver.session() as session:
-                session.run("MERGE (t:Table {name: $name})", name=table)
-
-            # 3. Get Columns for this Table
-            # Returns: (cid, name, type, notnull, dflt_value, pk)
-            cursor.execute(f"PRAGMA table_info('{table}')")
-            columns = cursor.fetchall()
-
-            for col in columns:
-                col_name = col[1]
-                col_type = col[2]
-                
-                with self.driver.session() as session:
-                    # Create Column Node and Link to Table
-                    query = """
-                    MATCH (t:Table {name: $table_name})
-                    MERGE (c:Column {name: $col_name, type: $col_type})
-                    MERGE (t)-[:HAS_COLUMN]->(c)
-                    """
-                    session.run(query, table_name=table, col_name=col_name, col_type=col_type)
-
-            # 4. Infer Foreign Keys (Naive Name Matching)
-            # In a real scenario, parse DDL or PRAGMA foreign_key_list
-            # Here we use a heuristic: if column is "user_id", link to "users" table
-            cursor.execute(f"PRAGMA foreign_key_list('{table}')")
-            fks = cursor.fetchall()
+    print(f"Processing {len(tables)} tables...")
+    for table in tables:
+        cursor.execute(f"PRAGMA table_info('{table}')")
+        cols = [col[1] for col in cursor.fetchall()]
+        col_text = ", ".join(cols)
+        
+        # This description is what both Vector and BM25 will search against
+        semantic_text = f"Table: {table}. Columns: {col_text}"
+        
+        print(f"   -> Embedding '{table}'...")
+        embedding = embed_model.get_text_embedding(semantic_text)
+        
+        with driver.session() as session:
+            # Store Node with Embedding AND Description
+            session.run("""
+                MERGE (t:Table {name: $name})
+                SET t.embedding = $embedding
+                SET t.description = $desc
+            """, name=table, embedding=embedding, desc=semantic_text)
             
-            # (id, seq, table, from, to, on_update, on_delete, match)
-            for fk in fks:
-                target_table = fk[2]
-                from_col = fk[3]
-                
-                with self.driver.session() as session:
-                    # Create a direct schema link between tables
-                    link_query = """
-                    MATCH (t1:Table {name: $t1}), (t2:Table {name: $t2})
-                    MERGE (t1)-[:RELATED_TO {key: $key}]->(t2)
-                    """
-                    session.run(link_query, t1=table, t2=target_table, key=from_col)
-                    print(f"Linked '{table}' -> '{target_table}' via {from_col}")
+            # Create Column Nodes
+            for col in cols:
+                session.run("""
+                    MATCH (t:Table {name: $t})
+                    MERGE (c:Column {name: $c})
+                    MERGE (t)-[:HAS_COLUMN]->(c)
+                """, t=table, c=col)
 
-        conn.close()
-        print("Schema Graph Built Successfully!")
+        # Foreign Keys
+        cursor.execute(f"PRAGMA foreign_key_list('{table}')")
+        for fk in cursor.fetchall():
+            target = fk[2]
+            with driver.session() as session:
+                session.run("""
+                    MATCH (t1:Table {name: $t1}), (t2:Table {name: $t2})
+                    MERGE (t1)-[:RELATED_TO]->(t2)
+                """, t1=table, t2=target)
+
+    driver.close()
+    conn.close()
+    print("Hybrid Knowledge Graph Built!")
 
 if __name__ == "__main__":
-    loader = SchemaLoader()
-    loader.load_schema()
-    loader.close()
+    load_schema_hybrid()
