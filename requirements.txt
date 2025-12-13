@@ -1,9 +1,8 @@
-google-generativeai
 llama-index
 llama-index-llms-google-genai
 llama-index-embeddings-google-genai
-llama-index-readers-database
-sqlalchemy
+neo4j
 pandas
-python-dotenv
 streamlit
+python-dotenv
+sqlalchemy

@@ -22,6 +22,7 @@ logs/
 *.sqlite
 *.sqlite3
 knowledge_base.db
+system_trace.log
 
 # ------------------------------------------------
 # IDE & OS JUNK
@@ -33,4 +34,3 @@ knowledge_base.db
 # ------------------------------------------------
 # OPTIONAL: DATA FILES
 # ------------------------------------------------
-data/
